@@ -11,7 +11,6 @@
 
 那么， imagecreatefrom* 系列函数是否能完全抵御图片中插入 php 代码的攻击呢，本文以 imagecreatefrompng() 函数作为研究对象，探讨实现重建 png 格式的图片中包含恶意 php 代码的可能性，以及所需要满足的条件。
 
-png 文件格式， imagecreatefrompng 函数解析， 修改图片， 上传， 文件包含 ...
 
 ## 0x01 png 图片格式
 
