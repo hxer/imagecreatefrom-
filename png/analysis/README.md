@@ -103,16 +103,16 @@ PLTE数据块是定义图像的调色板信息，PLTE可以包含1~256个调色�
 ```c
 gd_png.c/gdImageCreateFromPngCtx
 {
-...
-if (png_sig_cmp(sig, 0, 8) != 0) { /* bad signature */
-		return NULL;		/* bad signature */
-}
+    ...
+    if (png_sig_cmp(sig, 0, 8) != 0) { /* bad signature */
+            return NULL;		/* bad signature */
+    }
 
-...
+    ...
 
-png_set_read_fn (png_ptr, (void *) infile, gdPngReadData);
-png_read_info (png_ptr, info_ptr);	/* read all PNG info up to image data */
-...
+    png_set_read_fn (png_ptr, (void *) infile, gdPngReadData);
+    png_read_info (png_ptr, info_ptr);	/* read all PNG info up to image data */
+    ...
 }
 
 ```
@@ -122,28 +122,40 @@ png_read_info (png_ptr, info_ptr);	/* read all PNG info up to image data */
 ```c
 pngread.c/png_read_info
 {
-...
-else if (chunk_name == png_PLTE)
-         png_handle_PLTE(png_ptr, info_ptr, length);
-...
+    ...
+    else if (chunk_name == png_PLTE)
+            png_handle_PLTE(png_ptr, info_ptr, length);
+    ...
 }
-
 pngrutil.c/png_handle_PLTE 
 {
-...
-#ifndef PNG_READ_OPT_PLTE_SUPPORTED
-   if (png_ptr->color_type == PNG_COLOR_TYPE_PALETTE)
-#endif
-   {
-      png_crc_finish(png_ptr, (int) length - num * 3);
-   }
-...
+    ...
+    if (length > 3*PNG_MAX_PALETTE_LENGTH || length % 3)
+    {
+        png_crc_finish(png_ptr, length);
+
+        if (png_ptr->color_type != PNG_COLOR_TYPE_PALETTE)
+            png_chunk_benign_error(png_ptr, "invalid");
+
+        else
+            png_chunk_error(png_ptr, "invalid");
+
+        return;
+    }
+    ...
+    #ifndef PNG_READ_OPT_PLTE_SUPPORTED
+    if (png_ptr->color_type == PNG_COLOR_TYPE_PALETTE)
+    #endif
+    {
+        png_crc_finish(png_ptr, (int) length - num * 3);
+    }
+    ...
 }
 ```
 
 分析底层源码可知， png signature 是不可能插入 php 代码的； IHDR 存储的是 png 的图片信息，有固定的长度和格式，程序会提取图片信息数据进行验证，很难插入 php 代码；而 PLTE 主要进行了 CRC 校验和颜色数合法性校验等简单的校验，那么很可能在 data 域插入 php 代码。
 
-从对 PLTE chunk 验证的分析可知， 当原始图片格式给索引图片时，PLTE 数据块在满足 png 格式规范的情况下，程序还会进行 CRC 校验。因此，要将 PHP 代码写入 PLTE 数据块，不仅要修改 data 域的内容为php代码，然后修改 CRC 为正确的 CRC 校验值，当要填充的代码过长时，可以改变 length 域的数值，满足 length 为3的倍数， 且颜色数不超过色深中规定的颜色数。例如: IHDR 数据块中 Bit depth 为 08, 则最大的颜色数为 2^8=256, 那么 PLTE 数据块  data 的长度不超过 3*256=0x300。 这个长度对写入 php 一句话木马或者创建后门文件足够了。
+从对 PLTE chunk 验证的分析可知， 当原始图片格式给索引图片时，PLTE 数据块在满足 png 格式规范的情况下，程序还会进行 CRC 校验和长度合法性验证。因此，要将 PHP 代码写入 PLTE 数据块，不仅要修改 data 域的内容为php代码，然后修改 CRC 为正确的 CRC 校验值，当要填充的代码过长时，可以改变 length 域的数值，满足 length 为3的倍数， 且颜色数不超过色深中规定的颜色数。例如: IHDR 数据块中 Bit depth 为 08, 则最大的颜色数为 2^8=256, 那么 PLTE 数据块  data 的长度不超过 3*256=0x300。 这个长度对写入 php 一句话木马或者创建后门文件足够了。
 
 那么是不是所有 png 图片都可以在 PLTE 数据块插入 php 代码呢？下面通过实验予以说明。
 
@@ -229,7 +241,7 @@ imagecreatefrompng() 重建的图片如下
 
 所附代码实现了当 payload 长度大于 PLTE 数据长度时， 会重写 PLTE 数据块。然而 在实验过程中发现，imagecreatepng()函数重建的图片 PLTE 数据块的长度仍为原始的长度，即并不能随意扩充 PLTE 数据块的长度，具体原因还需深入分析源码， 也就是说要加载的 payload 不能超过 PLTE 数据块所给的长度。
 
-通常情况下， PLTE 数据块所给的长度可以满足我们插入基本的 php 后门代码，存在了那么一个点，是不是可以撬动地球了呢
+通常情况下， PLTE 数据块所给的长度可以满足我们插入基本的 php 后门代码
 
 当然本文还有许多不足之处，望大家批评指正
 

